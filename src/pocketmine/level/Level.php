@@ -1252,6 +1252,21 @@ class Level implements ChunkManager, Metadatable{
 		return $this->getChunk($x >> 4, $z >> 4, false)->getFullBlock($x & 0x0f, $y & 0x7f, $z & 0x0f);
 	}
 
+	private function setBlockCacheIndex($index, Block $block = null){
+		if(count($this->blockCache) >= 2048){
+			if(\pocketmine\DEBUG > 1){
+				$e = new \Exception("Block cache overflowed allowed size of 2048 entries"); //TODO: add cache size options
+				$this->server->getLogger()->logException($e);
+			}
+			$this->blockCache = [];
+		}
+		$this->blockCache[$index] = $block;
+	}
+
+	private function removeBlockCacheIndex($index){
+		unset($this->blockCache[$index]);
+	}
+
 	/**
 	 * Gets the Block object on the Vector3 location
 	 *
@@ -1277,8 +1292,9 @@ class Level implements ChunkManager, Metadatable{
 		$block->y = $pos->y;
 		$block->z = $pos->z;
 		$block->level = $this;
+		$this->setBlockCacheIndex($index, $block);
 
-		return $this->blockCache[$index] = $block;
+		return $block;
 	}
 
 	public function updateAllLight(Vector3 $pos){
