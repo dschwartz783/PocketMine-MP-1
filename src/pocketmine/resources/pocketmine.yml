@@ -107,6 +107,19 @@ level-settings:
  base-tick-rate: 1
  #Tick all players each tick even when other settings disallow this.
  always-tick-players: false
+ world-caches:
+  #Sets how often level caches will be cleared in ticks (default every 100 ticks or 5 seconds)
+  clear-frequency: 100
+  #Caps the level cache sizes.
+  #Hard limit: The cache may not exceed this size, and exceptions will be thrown if it does. 0 disables the cache completely, -1 allows it to have an unlimited size. Will throw exceptions if it is reached.
+  #Soft limit: The server will automatically clear the cache if it is larger than this size. 0 forces the server to clear it automatically regardless of size, -1 disables automatic clearing.
+  #WARNING: Be very careful with these options, as wrong values may cause performance issues or result in memory leaks.
+  block-cache:
+   soft-limit: 2048
+   hard-limit: -1
+  chunk-cache:
+   soft-limit: 768
+   hard-limit: -1
 
 chunk-sending:
  #Amount of chunks sent to players per tick

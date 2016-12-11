@@ -105,6 +105,7 @@ use pocketmine\plugin\Plugin;
 use pocketmine\Server;
 use pocketmine\tile\Chest;
 use pocketmine\tile\Tile;
+use pocketmine\utils\FixedSizeCache;
 use pocketmine\utils\LevelException;
 use pocketmine\utils\Random;
 use pocketmine\utils\ReversePriorityQueue;
@@ -148,10 +149,11 @@ class Level implements ChunkManager, Metadatable{
 	/** @var Tile[] */
 	public $updateTiles = [];
 
-	private $blockCache = [];
+	/** @var FixedSizeCache */
+	private $blockCache;
 
-	/** @var DataPacket[] */
-	private $chunkCache = [];
+	/** @var FixedSizeCache */
+	private $chunkCache;
 
 	private $cacheChunks = false;
 
@@ -348,6 +350,16 @@ class Level implements ChunkManager, Metadatable{
 		$this->chunkTickList = [];
 		$this->clearChunksOnTick = (bool) $this->server->getProperty("chunk-ticking.clear-tick-list", true);
 		$this->cacheChunks = (bool) $this->server->getProperty("chunk-sending.cache-chunks", false);
+		$this->blockCache = new FixedSizeCache(
+			(int) $this->server->getProperty("level-settings.world-caches.block-cache.soft-limit", 2048),
+			(int) $this->server->getProperty("level-settings.world-caches.block-cache.hard-limit", -1),
+			$this->folderName . " BlockCache"
+		);
+		$this->chunkCache = new FixedSizeCache(
+			(int) $this->server->getProperty("level-settings.world-caches.chunk-cache.soft-limit", 768),
+			(int) $this->server->getProperty("level-settings.world-caches.chunk-cache.hard-limit", -1),
+			$this->folderName . " ChunkCache"
+		);
 
 		$this->timings = new LevelTimings($this);
 		$this->temporalPosition = new Position(0, 0, 0, $this);
@@ -423,7 +435,8 @@ class Level implements ChunkManager, Metadatable{
 		$this->provider->close();
 		$this->provider = null;
 		$this->blockMetadata = null;
-		$this->blockCache = [];
+		$this->blockCache = null;
+		$this->chunkCache = null;
 		$this->temporalPosition = null;
 	}
 
@@ -680,7 +693,7 @@ class Level implements ChunkManager, Metadatable{
 		if(count($this->changedBlocks) > 0){
 			if(count($this->players) > 0){
 				foreach($this->changedBlocks as $index => $blocks){
-					unset($this->chunkCache[$index]);
+					unset($this->chunkCache->contents[$index]);
 					Level::getXZ($index, $chunkX, $chunkZ);
 					if(count($blocks) > 512){
 						$chunk = $this->getChunk($chunkX, $chunkZ);
@@ -692,7 +705,7 @@ class Level implements ChunkManager, Metadatable{
 					}
 				}
 			}else{
-				$this->chunkCache = [];
+				$this->chunkCache->contents = [];
 			}
 
 			$this->changedBlocks = [];
@@ -854,15 +867,15 @@ class Level implements ChunkManager, Metadatable{
 
 	public function clearCache(bool $full = false){
 		if($full){
-			$this->chunkCache = [];
-			$this->blockCache = [];
+			$this->chunkCache->clear();
+			$this->blockCache->clear();
 		}else{
-			if(count($this->chunkCache) > 768){
-				$this->chunkCache = [];
+			if($this->chunkCache->needsClear()){
+				$this->chunkCache->clear();
 			}
 
-			if(count($this->blockCache) > 2048){
-				$this->blockCache = [];
+			if($this->blockCache->needsClear()){
+				$this->blockCache->clear();
 			}
 
 		}
@@ -870,7 +883,7 @@ class Level implements ChunkManager, Metadatable{
 	}
 
 	public function clearChunkCache(int $chunkX, int $chunkZ){
-		unset($this->chunkCache[Level::chunkHash($chunkX, $chunkZ)]);
+		unset($this->chunkCache->contents[Level::chunkHash($chunkX, $chunkZ)]);
 	}
 
 	private function tickChunks(){
@@ -1256,21 +1269,6 @@ class Level implements ChunkManager, Metadatable{
 		return $this->getChunk($x >> 4, $z >> 4, false)->getFullBlock($x & 0x0f, $y & 0x7f, $z & 0x0f);
 	}
 
-	private function setBlockCacheIndex($index, Block $block = null){
-		if(count($this->blockCache) >= 2048){
-			if(\pocketmine\DEBUG > 1){
-				$e = new \Exception("Block cache overflowed allowed size of 2048 entries"); //TODO: add cache size options
-				$this->server->getLogger()->logException($e);
-			}
-			$this->blockCache = [];
-		}
-		$this->blockCache[$index] = $block;
-	}
-
-	private function removeBlockCacheIndex($index){
-		unset($this->blockCache[$index]);
-	}
-
 	/**
 	 * Gets the Block object on the Vector3 location
 	 *
@@ -1283,8 +1281,8 @@ class Level implements ChunkManager, Metadatable{
 	public function getBlock(Vector3 $pos, bool $cached = true, bool $cacheIfNotFound = false) : Block{
 		$pos = $pos->floor();
 		$index = Level::blockHash($pos->x, $pos->y, $pos->z);
-		if($cached and isset($this->blockCache[$index])){
-			return $this->blockCache[$index];
+		if($cached and isset($this->blockCache->contents[$index])){
+			return $this->blockCache->contents[$index];
 		}elseif($pos->y >= 0 and $pos->y < 128 and isset($this->chunks[$chunkIndex = Level::chunkHash($pos->x >> 4, $pos->z >> 4)])){
 			$fullState = $this->chunks[$chunkIndex]->getFullBlock($pos->x & 0x0f, $pos->y & 0x7f, $pos->z & 0x0f);
 		}else{
@@ -1299,7 +1297,11 @@ class Level implements ChunkManager, Metadatable{
 		$block->level = $this;
 
 		if($cacheIfNotFound){
-			$this->setBlockCacheIndex($index, $block);
+			try{
+				$this->chunkCache->add($index, $block);
+			}catch(\OutOfBoundsException $e){ //Cache full
+				$this->server->getLogger()->logException($e);
+			}
 		}
 
 		return $block;
@@ -1431,13 +1433,13 @@ class Level implements ChunkManager, Metadatable{
 			}
 
 			$block->position($pos);
-			unset($this->blockCache[Level::blockHash($pos->x, $pos->y, $pos->z)]);
+			unset($this->blockCache->contents[Level::blockHash($pos->x, $pos->y, $pos->z)]);
 
 			$index = Level::chunkHash($pos->x >> 4, $pos->z >> 4);
 
 			if($direct === true){
 				$this->sendBlocks($this->getChunkPlayers($pos->x >> 4, $pos->z >> 4), [$block], UpdateBlockPacket::FLAG_ALL_PRIORITY);
-				unset($this->chunkCache[$index]);
+				unset($this->chunkCache->contents[$index]);
 			}else{
 				if(!isset($this->changedBlocks[$index])){
 					$this->changedBlocks[$index] = [];
@@ -1962,7 +1964,7 @@ class Level implements ChunkManager, Metadatable{
 	 * @param int $id 0-255
 	 */
 	public function setBlockIdAt(int $x, int $y, int $z, int $id){
-		unset($this->blockCache[Level::blockHash($x, $y, $z)]);
+		unset($this->blockCache->contents[Level::blockHash($x, $y, $z)]);
 		$this->getChunk($x >> 4, $z >> 4, true)->setBlockId($x & 0x0f, $y & 0x7f, $z & 0x0f, $id & 0xff);
 
 		if(!isset($this->changedBlocks[$index = Level::chunkHash($x >> 4, $z >> 4)])){
@@ -2024,7 +2026,7 @@ class Level implements ChunkManager, Metadatable{
 	 * @param int $data 0-15
 	 */
 	public function setBlockDataAt(int $x, int $y, int $z, int $data){
-		unset($this->blockCache[Level::blockHash($x, $y, $z)]);
+		unset($this->blockCache->contents[Level::blockHash($x, $y, $z)]);
 		$this->getChunk($x >> 4, $z >> 4, true)->setBlockData($x & 0x0f, $y & 0x7f, $z & 0x0f, $data & 0x0f);
 
 		if(!isset($this->changedBlocks[$index = Level::chunkHash($x >> 4, $z >> 4)])){
@@ -2238,7 +2240,7 @@ class Level implements ChunkManager, Metadatable{
 			}
 		}
 
-		unset($this->chunkCache[$index]);
+		unset($this->chunkCache->contents[$index]);
 		$chunk->setChanged();
 
 		if(!$this->isChunkInUse($chunkX, $chunkZ)){
@@ -2328,7 +2330,7 @@ class Level implements ChunkManager, Metadatable{
 			foreach($this->chunkSendQueue[$index] as $player){
 				/** @var Player $player */
 				if($player->isConnected() and isset($player->usedChunks[$index])){
-					$player->sendChunk($x, $z, $this->chunkCache[$index]);
+					$player->sendChunk($x, $z, $this->chunkCache->contents[$index]);
 				}
 			}
 			unset($this->chunkSendQueue[$index]);
@@ -2348,7 +2350,7 @@ class Level implements ChunkManager, Metadatable{
 				}
 				Level::getXZ($index, $x, $z);
 				$this->chunkSendTasks[$index] = true;
-				if(isset($this->chunkCache[$index])){
+				if(isset($this->chunkCache->contents[$index])){
 					$this->sendChunkFromCache($x, $z);
 					continue;
 				}
@@ -2369,8 +2371,8 @@ class Level implements ChunkManager, Metadatable{
 
 		$index = Level::chunkHash($x, $z);
 
-		if(!isset($this->chunkCache[$index]) and $this->cacheChunks and $this->server->getMemoryManager()->canUseChunkCache()){
-			$this->chunkCache[$index] = Player::getChunkCacheFromData($x, $z, $payload, $ordering);
+		if(!isset($this->chunkCache->contents[$index]) and $this->cacheChunks and $this->server->getMemoryManager()->canUseChunkCache()){
+			$this->chunkCache->contents[$index] = Player::getChunkCacheFromData($x, $z, $payload, $ordering);
 			$this->sendChunkFromCache($x, $z);
 			$this->timings->syncChunkSendTimer->stopTiming();
 			return;
@@ -2591,7 +2593,7 @@ class Level implements ChunkManager, Metadatable{
 
 		unset($this->chunks[$index]);
 		unset($this->chunkTickList[$index]);
-		unset($this->chunkCache[$index]);
+		unset($this->chunkCache->contents[$index]);
 
 		$this->timings->doChunkUnload->stopTiming();
 

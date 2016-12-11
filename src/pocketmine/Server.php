@@ -224,6 +224,7 @@ class Server{
 	private $autoTickRateLimit = 20;
 	private $alwaysTickPlayers = false;
 	private $baseTickRate = 1;
+	private $cacheClearFrequency = 100;
 
 	private $autoSaveTicker = 0;
 	private $autoSaveTicks = 6000;
@@ -1434,6 +1435,7 @@ class Server{
 			$this->autoTickRateLimit = (int) $this->getProperty("level-settings.auto-tick-rate-limit", 20);
 			$this->alwaysTickPlayers = (int) $this->getProperty("level-settings.always-tick-players", false);
 			$this->baseTickRate = (int) $this->getProperty("level-settings.base-tick-rate", 1);
+			$this->cacheClearFrequency = (int) $this->getProperty("level-settings.world-caches.clear-frequency", 100);
 
 			$this->scheduler = new ServerScheduler();
 
@@ -2390,7 +2392,7 @@ class Server{
 			$this->sendUsage(SendUsageTask::TYPE_STATUS);
 		}
 
-		if(($this->tickCounter % 100) === 0){
+		if(($this->tickCounter % $this->cacheClearFrequency) === 0){
 			foreach($this->levels as $level){
 				$level->clearCache();
 			}
