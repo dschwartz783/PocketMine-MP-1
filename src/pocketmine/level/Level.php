@@ -1228,13 +1228,17 @@ class Level implements ChunkManager, Metadatable{
 	*/
 
 	public function getFullLight(Vector3 $pos) : int{
-		$chunk = $this->getChunk($pos->x >> 4, $pos->z >> 4, false);
+		return $this->getFullLightAt($pos->x, $pos->y, $pos->z);
+	}
+
+	public function getFullLightAt(int $x, int $y, int $z) : int{
+		$chunk = $this->getChunk($x >> 4, $z >> 4, false);
 		$level = 0;
 		if($chunk !== null){
-			$level = $chunk->getBlockSkyLight($pos->x & 0x0f, $pos->y & 0x7f, $pos->z & 0x0f);
+			$level = $chunk->getBlockSkyLight($x & 0x0f, $y & 0x7f, $z & 0x0f);
 			//TODO: decrease light level by time of day
 			if($level < 15){
-				$level = max($chunk->getBlockLight($pos->x & 0x0f, $pos->y & 0x7f, $pos->z & 0x0f));
+				$level = $chunk->getBlockLight($x & 0x0f, $y & 0x7f, $z & 0x0f);
 			}
 		}
 
@@ -1271,11 +1275,12 @@ class Level implements ChunkManager, Metadatable{
 	 * Gets the Block object on the Vector3 location
 	 *
 	 * @param Vector3 $pos
-	 * @param boolean $cached
+	 * @param bool    $cached
+	 * @param bool    $cacheIfNotFound whether to cache the block object if a new one had to be created
 	 *
 	 * @return Block
 	 */
-	public function getBlock(Vector3 $pos, $cached = true) : Block{
+	public function getBlock(Vector3 $pos, bool $cached = true, bool $cacheIfNotFound = false) : Block{
 		$pos = $pos->floor();
 		$index = Level::blockHash($pos->x, $pos->y, $pos->z);
 		if($cached and isset($this->blockCache[$index])){
@@ -1292,7 +1297,10 @@ class Level implements ChunkManager, Metadatable{
 		$block->y = $pos->y;
 		$block->z = $pos->z;
 		$block->level = $this;
-		$this->setBlockCacheIndex($index, $block);
+
+		if($cacheIfNotFound){
+			$this->setBlockCacheIndex($index, $block);
+		}
 
 		return $block;
 	}

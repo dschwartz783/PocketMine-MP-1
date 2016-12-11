@@ -2,11 +2,11 @@
 
 /*
  *
- *  ____            _        _   __  __ _                  __  __ ____  
- * |  _ \ ___   ___| | _____| |_|  \/  (_)_ __   ___      |  \/  |  _ \ 
+ *  ____            _        _   __  __ _                  __  __ ____
+ * |  _ \ ___   ___| | _____| |_|  \/  (_)_ __   ___      |  \/  |  _ \
  * | |_) / _ \ / __| |/ / _ \ __| |\/| | | '_ \ / _ \_____| |\/| | |_) |
- * |  __/ (_) | (__|   <  __/ |_| |  | | | | | |  __/_____| |  | |  __/ 
- * |_|   \___/ \___|_|\_\___|\__|_|  |_|_|_| |_|\___|     |_|  |_|_| 
+ * |  __/ (_) | (__|   <  __/ |_| |  | | | | | |  __/_____| |  | |  __/
+ * |_|   \___/ \___|_|\_\___|\__|_|  |_|_|_| |_|\___|     |_|  |_|_|
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -15,7 +15,7 @@
  *
  * @author PocketMine Team
  * @link http://www.pocketmine.net/
- * 
+ *
  *
 */
 
@@ -63,24 +63,32 @@ class Grass extends Solid{
 
 	public function onUpdate($type){
 		if($type === Level::BLOCK_UPDATE_RANDOM){
-			$block = $this->getLevel()->getBlock(new Vector3($this->x, $this->y, $this->z));
-			if($block->getSide(1)->getLightLevel() < 4){
-				Server::getInstance()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Dirt()));
-			}elseif($block->getSide(1)->getLightLevel() >= 9){
-				for($l = 0; $l < 4; ++$l){
-					$x = mt_rand($this->x - 1, $this->x + 1);
-					$y = mt_rand($this->y - 2, $this->y + 2);
-					$z = mt_rand($this->z - 1, $this->z + 1);
-					$block = $this->getLevel()->getBlock(new Vector3($x, $y, $z));
-					if($block->getId() === Block::DIRT && $block->getDamage() === 0x0F && $block->getSide(1)->getLightLevel() >= 4 && $block->z <= 2){
-						Server::getInstance()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Grass()));
-						if(!$ev->isCancelled()){
-							$this->getLevel()->setBlock($block, $ev->getNewState());
-						}
+			if(!($up = $this->getSide(Vector3::SIDE_UP))->isTransparent() or $up instanceof Liquid){
+				//Block on top of the grass, kill it
+				$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($this, $this, new Dirt()));
+				if(!$ev->isCancelled()){
+					$this->level->setBlock($this, $ev->getNewState());
+				}
+			}elseif($this->level->getFullLight($this->add(0, 1, 0)) >= 9){
+				$x = mt_rand($this->x - 1, $this->x + 1);
+				$y = mt_rand($this->y - 3, $this->y + 1);
+				$z = mt_rand($this->z - 1, $this->z + 1);
+
+				//Use primitive methods for more performance.
+				//TODO: change this to full light once skylight has been implemented
+				if($this->level->getBlockIdAt($x, $y, $z) === Block::DIRT and $this->level->getBlockLightAt($x, $y + 1, $z) /*$this->level->getFullLightAt($x, $y + 1, $z)*/ >= 4){
+					$block = $this->level->getBlock(new Vector3($x, $y, $z));
+
+					$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Grass()));
+					if(!$ev->isCancelled()){
+						$this->level->setBlock($block, $ev->getNewState());
 					}
 				}
 			}
+			return Level::BLOCK_UPDATE_RANDOM;
 		}
+
+		return false;
 	}
 
 	public function onActivate(Item $item, Player $player = null){
