@@ -77,7 +77,6 @@ class Grass extends Solid{
 				//Use primitive methods for more performance.
 				//TODO: change this to full light once skylight has been implemented
 				if($this->level->getBlockIdAt($x, $y, $z) === Block::DIRT and $this->level->getBlockLightAt($x, $y + 1, $z) /*$this->level->getFullLightAt($x, $y + 1, $z)*/ >= 4){
-					echo "$x $y $z\n";
 					$block = $this->level->getBlock(new Vector3($x, $y, $z));
 
 					$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Grass()));
