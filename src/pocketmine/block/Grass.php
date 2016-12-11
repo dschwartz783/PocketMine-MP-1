@@ -77,14 +77,16 @@ class Grass extends Solid{
 				//Use primitive methods for more performance.
 				//TODO: change this to full light once skylight has been implemented
 				if($this->level->getBlockIdAt($x, $y, $z) === Block::DIRT and $this->level->getBlockLightAt($x, $y + 1, $z) /*$this->level->getFullLightAt($x, $y + 1, $z)*/ >= 4){
-					$block = $this->level->getBlock(new Vector3($x, $y, $z));
-
-					$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Grass()));
-					if(!$ev->isCancelled()){
-						$this->level->setBlock($block, $ev->getNewState());
+					$block = $this->level->getBlock(new Vector3($x, $y, $z), true, false);
+					if(($up = $block->getSide(Vector3::SIDE_UP, 1, false))->isTransparent() and !($up instanceof Liquid)){
+						$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Grass()));
+						if(!$ev->isCancelled()){
+							$this->level->setBlock($block, $ev->getNewState());
+						}
 					}
 				}
 			}
+			
 			return Level::BLOCK_UPDATE_RANDOM;
 		}
 
