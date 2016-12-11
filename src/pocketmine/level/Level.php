@@ -1278,7 +1278,7 @@ class Level implements ChunkManager, Metadatable{
 	 *
 	 * @return Block
 	 */
-	public function getBlock(Vector3 $pos, bool $cached = true, bool $cacheIfNotFound = false) : Block{
+	public function getBlock(Vector3 $pos, bool $cached = true, bool $cacheIfNotFound = true) : Block{
 		$pos = $pos->floor();
 		$index = Level::blockHash($pos->x, $pos->y, $pos->z);
 		if($cached and isset($this->blockCache->contents[$index])){
@@ -1298,7 +1298,7 @@ class Level implements ChunkManager, Metadatable{
 
 		if($cacheIfNotFound){
 			try{
-				$this->chunkCache->add($index, $block);
+				$this->blockCache->add($index, $block);
 			}catch(\OutOfBoundsException $e){ //Cache full
 				$this->server->getLogger()->logException($e);
 			}

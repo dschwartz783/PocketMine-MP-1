@@ -37,6 +37,7 @@ class FixedSizeCache{
 	public function __construct(int $softLimit, int $hardLimit, string $name = "Unknown"){
 		$this->softLimit = $softLimit;
 		$this->hardLimit = $hardLimit;
+		$this->name = $name;
 		$this->contents = [];
 	}
 
@@ -53,6 +54,7 @@ class FixedSizeCache{
 		if($this->hardLimit === 0){ //cache disabled
 			return;
 		}
+
 		if(count($this->contents) >= $this->hardLimit){
 			$this->contents = [];
 			$this->contents[$index] = $value;

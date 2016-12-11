@@ -63,13 +63,13 @@ class Grass extends Solid{
 
 	public function onUpdate($type){
 		if($type === Level::BLOCK_UPDATE_RANDOM){
-			if(!($up = $this->getSide(Vector3::SIDE_UP))->isTransparent() or $up instanceof Liquid){
+			if(!($up = $this->getSide(Vector3::SIDE_UP, 1, false))->isTransparent() or $up instanceof Liquid){
 				//Block on top of the grass, kill it
 				$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($this, $this, new Dirt()));
 				if(!$ev->isCancelled()){
 					$this->level->setBlock($this, $ev->getNewState());
 				}
-			}elseif($this->level->getFullLight($this->add(0, 1, 0)) >= 9){
+			}elseif($this->level->getFullLightAt($this->x, $this->y + 1, $this->z) >= 9){
 				$x = mt_rand($this->x - 1, $this->x + 1);
 				$y = mt_rand($this->y - 3, $this->y + 1);
 				$z = mt_rand($this->z - 1, $this->z + 1);
@@ -77,6 +77,7 @@ class Grass extends Solid{
 				//Use primitive methods for more performance.
 				//TODO: change this to full light once skylight has been implemented
 				if($this->level->getBlockIdAt($x, $y, $z) === Block::DIRT and $this->level->getBlockLightAt($x, $y + 1, $z) /*$this->level->getFullLightAt($x, $y + 1, $z)*/ >= 4){
+					echo "$x $y $z\n";
 					$block = $this->level->getBlock(new Vector3($x, $y, $z));
 
 					$this->level->getServer()->getPluginManager()->callEvent($ev = new BlockSpreadEvent($block, $this, new Grass()));

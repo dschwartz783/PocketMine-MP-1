@@ -586,14 +586,15 @@ class Block extends Position implements BlockIds, Metadatable{
 	/**
 	 * Returns the Block on the side $side, works like Vector3::side()
 	 *
-	 * @param int $side
-	 * @param int $step
+	 * @param int  $side
+	 * @param int  $step
+	 * @param bool $shouldCache
 	 *
 	 * @return Block
 	 */
-	public function getSide($side, $step = 1){
+	public function getSide($side, $step = 1, bool $shouldCache = true){
 		if($this->isValid()){
-			return $this->getLevel()->getBlock(Vector3::getSide($side, $step));
+			return $this->getLevel()->getBlock(Vector3::getSide($side, $step), true, $shouldCache);
 		}
 
 		return Block::get(Item::AIR, 0, Position::fromObject(Vector3::getSide($side, $step)));
