@@ -19,13 +19,13 @@
  *
 */
 
-namespace pocketmine\level\format\anvil;
+declare(strict_types = 1);
+
+namespace pocketmine\level\format\region;
 
 use pocketmine\level\format\Chunk;
-use pocketmine\level\format\LevelProvider;
 use pocketmine\level\format\generic\GenericChunk;
 use pocketmine\level\format\generic\SubChunk;
-use pocketmine\level\format\mcregion\McRegion;
 use pocketmine\level\Level;
 use pocketmine\nbt\NBT;
 use pocketmine\nbt\tag\{ByteArrayTag, ByteTag, CompoundTag, IntArrayTag, IntTag, ListTag, LongTag};
@@ -37,7 +37,9 @@ use pocketmine\utils\MainLogger;
 
 class Anvil extends McRegion{
 
-	public static function nbtSerialize(GenericChunk $chunk) : string{
+	const REGION_FILE_EXTENSION = "mca";
+
+	public function nbtSerialize(GenericChunk $chunk) : string{
 		$nbt = new CompoundTag("Level", []);
 		$nbt->xPos = new IntTag("xPos", $chunk->getX());
 		$nbt->zPos = new IntTag("zPos", $chunk->getZ());
@@ -97,7 +99,7 @@ class Anvil extends McRegion{
 		return $writer->writeCompressed(ZLIB_ENCODING_DEFLATE, RegionLoader::$COMPRESSION_LEVEL);
 	}
 
-	public static function nbtDeserialize(string $data, LevelProvider $provider = null){
+	public function nbtDeserialize(string $data){
 		$nbt = new NBT(NBT::BIG_ENDIAN);
 		try{
 			$nbt->readCompressed($data, ZLIB_ENCODING_DEFLATE);
@@ -134,7 +136,7 @@ class Anvil extends McRegion{
 			}
 
 			$result = new GenericChunk(
-				$provider,
+				$this,
 				$chunk["xPos"],
 				$chunk["zPos"],
 				$subChunks,
@@ -153,34 +155,8 @@ class Anvil extends McRegion{
 		}
 	}
 
-	/** @var RegionLoader[] */
-	protected $regions = [];
-
-	/** @var AnvilChunk[] */
-	protected $chunks = [];
-
-	public static function getProviderName(){
+	public static function getProviderName() : string{
 		return "anvil";
-	}
-
-	public static function getProviderOrder(){
-		return self::ORDER_YZX;
-	}
-
-	public static function isValid($path){
-		$isValid = (file_exists($path . "/level.dat") and is_dir($path . "/region/"));
-
-		if($isValid){
-			$files = glob($path . "/region/*.mc*");
-			foreach($files as $f){
-				if(strpos($f, ".mcr") !== false){ //McRegion
-					$isValid = false;
-					break;
-				}
-			}
-		}
-
-		return $isValid;
 	}
 
 	public function getWorldHeight() : int{
@@ -188,23 +164,4 @@ class Anvil extends McRegion{
 		return 256;
 	}
 
-	/**
-	 * @param $x
-	 * @param $z
-	 *
-	 * @return RegionLoader
-	 */
-	protected function getRegion($x, $z){
-		return $this->regions[Level::chunkHash($x, $z)] ?? null;
-	}
-
-	protected function loadRegion($x, $z){
-		if(isset($this->regions[$index = Level::chunkHash($x, $z)])){
-			return true;
-		}
-
-		$this->regions[$index] = new RegionLoader($this, $x, $z);
-
-		return true;
-	}
 }
